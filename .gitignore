@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*.pyc
+plano*.json
+apply.out
+dryrun.out
+*.out
+.env

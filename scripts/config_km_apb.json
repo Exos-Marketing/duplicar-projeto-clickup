@@ -1,0 +1,61 @@
+{
+  "workspace": "9013012202",
+  "source": {
+    "suffix": "[RS][POS][FEV][26]",
+    "phase_lists": {
+      "Concepção": "901302376636",
+      "Setup": "901302376637",
+      "Captação": "901302378944",
+      "Aquecimento": "901302378939",
+      "Evento": "901302376639",
+      "Lançamento": "901302376640",
+      "Pós Venda": "901302376641",
+      "Downsell": "901310974062"
+    },
+    "skip_status": ["descartado", "descartada", "declinado", "declinada"]
+  },
+  "target": {
+    "suffix": "[KM][PEP][APB][26]",
+    "card_id": "86aefexzv",
+    "panel_id": "901312155462",
+    "tag": "perpétuo",
+    "priority": 3
+  },
+  "phase_map": {
+    "Concepção":   {"dst": "901305958427", "rel": "4b7b6a98-aa25-4e87-837b-c849d8300e18"},
+    "Setup":       {"dst": "901305958430", "rel": "7d008b1d-e5e0-418a-848b-a2a2ffe17ce8"},
+    "Captação":    {"dst": "901305958431", "rel": "59514ee3-9eb2-4e68-b953-3a44d3ef7024"},
+    "Aquecimento": {"dst": "901305958431", "rel": "59514ee3-9eb2-4e68-b953-3a44d3ef7024"},
+    "Evento":      {"dst": "901312156801", "rel": "4e5e2edd-b339-4341-a2c7-4266769055e8"},
+    "Lançamento":  {"dst": "901312156801", "rel": "4e5e2edd-b339-4341-a2c7-4266769055e8"},
+    "Pós Venda":   {"dst": "901312156858", "rel": "6654d6bc-24c0-4fe7-b594-5a2389efbc08"},
+    "Downsell":    {"dst": "901312156801", "rel": "4e5e2edd-b339-4341-a2c7-4266769055e8"}
+  },
+  "fields": [
+    {"name": "Cliente",            "id": "4334ea1b-2d90-4974-9ac2-287142e9be5e", "type": "drop", "value": "4d8875f7-a817-4415-b80a-0fcc4c255ff9"},
+    {"name": "Produto",            "id": "b9d27455-df3d-439b-aa68-1af6c0d08fe1", "type": "drop", "value": "c930970c-f293-4182-b74a-9c703dd434f3"},
+    {"name": "Idioma",             "id": "f45be5a5-a908-453f-bc37-c8300c40e71d", "type": "drop", "value": "f1d00fc8-26df-4e4d-a95f-575e980a29b5"},
+    {"name": "Empresa",            "id": "60a53862-4eaa-49d7-910a-f20fb4352145", "type": "drop", "value": "4098a913-8e9f-4621-b4b9-6aa4e0e93066"},
+    {"name": "Estrategista",       "id": "d0c8fa87-69ee-4130-a8ad-f6058eec11bf", "type": "user", "value": 87901690},
+    {"name": "Copywriter",         "id": "c8a7d8d1-fced-4bbc-8147-d097fe9d61f5", "type": "user", "value": 87901690},
+    {"name": "Designer",           "id": "97d791d0-f777-4081-8b09-45ac6d339e8d", "type": "user", "value": 54941517},
+    {"name": "Editor de Vídeos",   "id": "6519b36d-da24-4312-88e7-e23052fd0c85", "type": "user", "value": 60428351},
+    {"name": "Webdesigner",        "id": "c49608f9-49e9-4934-ac8a-e7f0d72a177c", "type": "user", "value": 55123416},
+    {"name": "Gestor Tráfego",     "id": "0b61034c-4d5f-4d4b-b21a-e0afa8e489c1", "type": "user", "value": 290496564},
+    {"name": "Gestor Projetos",    "id": "23d522ad-218a-400d-90d7-0b3d97d0148d", "type": "user", "value": 54927970},
+    {"name": "Gestor Automações",  "id": "17c20951-740d-40fc-8502-218c4c0a1a99", "type": "user", "value": 55123416}
+  ],
+  "expert_swap": {"Elen Tolentino": "Kleber Meireles", "Kleber Meirelles": "Kleber Meireles"},
+  "name_swaps": [
+    ["(ET]", "[ET]"],
+    ["[ET][RS][POS][FEV][26]", "[KM][PEP][APB][26]"],
+    ["[ET][RS][EP][FEV][26]", "[KM][PEP][APB][26]"],
+    ["[ET][RS][POS][FEV][25]", "[KM][PEP][APB][26]"],
+    ["[ET][RS][POS][POS][26]", "[KM][PEP][APB][26]"],
+    ["[RS][POS][FEV][26]", "[KM][PEP][APB][26]"],
+    ["[RS][EP][FEV][26]", "[KM][PEP][APB][26]"],
+    ["[RS][POS][FEV][25]", "[KM][PEP][APB][26]"],
+    ["[RS][POS][POS][26]", "[KM][PEP][APB][26]"]
+  ],
+  "docs": {"enabled": true, "reference_label": "Documento de referência (anterior)"}
+}

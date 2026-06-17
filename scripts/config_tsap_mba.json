@@ -1,0 +1,62 @@
+{
+  "source": {
+    "workspace": "9013012202",
+    "suffix": "[ET][RS][POS][FEV][26]",
+    "phase_lists": {
+      "Concepção": "901302376636",
+      "Setup": "901302376637",
+      "Captação": "901302378944",
+      "Aquecimento": "901302378939",
+      "Evento": "901302376639",
+      "Lançamento": "901302376640",
+      "Pós Venda": "901302376641",
+      "Downsell": "901310974062"
+    },
+    "skip_status": ["descartado", "descartada", "declinado", "declinada"]
+  },
+  "target": {
+    "workspace": "90171059720",
+    "suffix": "[MF][LP][MBA][JUL][26]",
+    "card_id": "86e0m7pp5",
+    "panel_id": "901712380947",
+    "tag": null,
+    "priority": 3
+  },
+  "phase_map": {
+    "Concepção":   {"dst": "901712381014", "rel": "7864f2fc-4a61-468a-8fa4-21d309cda440"},
+    "Setup":       {"dst": "901712380952", "rel": "6e266e27-80a7-4990-821f-12e09c03d5dc"},
+    "Captação":    {"dst": "901712380983", "rel": "8876ecda-2ee4-4dcb-8ecf-c502cfc7009d"},
+    "Aquecimento": {"dst": "901712381003", "rel": "07b344d3-7570-4dc3-9a6a-13eaaafba312"},
+    "Evento":      {"dst": "901712380999", "rel": "ef259729-aaf1-4267-89c5-75ac3dae66bf"},
+    "Lançamento":  {"dst": "901712380963", "rel": "cb4589ab-abe8-4939-8693-5ab3afd97527"},
+    "Pós Venda":   {"dst": "901712380991", "rel": "4f41ad25-e2ca-431f-8e11-3565f5f7fabc"},
+    "Downsell":    {"dst": "901712380953", "rel": "6f56c15c-91ea-416c-b218-f69473f47dfe"}
+  },
+  "activity_map": {
+    "901301657744": "901712307227",
+    "901301657750": "901712307221",
+    "901301657745": "901712307228",
+    "901301657746": "901712307215",
+    "901302872466": "901712307222",
+    "901301657755": "901712307236",
+    "901301657753": "901712307235",
+    "901301657742": "901712307217"
+  },
+  "task_type_map": {"1008": 1011, "1020": 1007},
+  "fields": [
+    {"name": "Produto",           "id": "2f307931-53af-402f-a14c-d5f8d1c93e7a", "type": "drop", "value": "26d2a5cb-95ba-4dd0-9e0c-2d66b4edc6f4"},
+    {"name": "Empresa",           "id": "43e441c9-8ed9-4afe-98cc-9d0a5b64cdfe", "type": "drop", "value": "f79799c6-8ed4-4cde-adf8-05f8a616f355"},
+    {"name": "Evento",            "id": "6e168055-38d7-4476-bd26-8301849ba8d0", "type": "drop", "value": "1b946059-2521-496c-a004-277f1d232720"},
+    {"name": "Idioma",            "id": "e3d1b775-89e6-4dde-9d06-dc127eacf47f", "type": "drop", "value": "888d95c8-e988-4a4a-ab0b-090cb7d12eff"},
+    {"name": "Estrategista",      "id": "200575af-bac0-4624-bc26-14d30cedac18", "type": "user", "value": 54927970},
+    {"name": "Gestor Projetos",   "id": "8e01a171-5042-41b9-96eb-42dd8be75a2b", "type": "user", "value": 54927970},
+    {"name": "Gestor Tráfego",    "id": "729f21cb-4555-473f-ac01-5d0d9eab3f43", "type": "user", "value": 55123416},
+    {"name": "Designer",          "id": "d5e1baf9-a1b3-4b52-9a81-4c0530c28a25", "type": "user", "value": 290582394},
+    {"name": "Webdesigner",       "id": "f218a967-de65-4db1-845c-b7abdb6d3d38", "type": "user", "value": 82122879},
+    {"name": "Copywriter",        "id": "c7b34249-0c35-4726-afe1-b0c5937d67c5", "type": "user", "value": 54927970},
+    {"name": "Gestor Automações", "id": "3efb6f62-7ff0-415c-a13e-c5089115e038", "type": "user", "value": 54953372}
+  ],
+  "expert_swap": {"Elen Tolentino": "o expert", "Elen": "o expert"},
+  "docs": {"enabled": true, "on_marcos": true, "reference_label": "Documento de referência (Agência EU)"},
+  "update_existing": false
+}
