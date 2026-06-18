@@ -103,7 +103,8 @@ Exemplo pronto: `scripts/config_tsap_mba.json` (Agência EU → Telesapiens).
 | Atributo | Ação |
 |---|---|
 | Etiqueta · Tipo (Milestone) · Campos personalizados | **MANTER** (setar Cliente/Produto/Idioma/Empresa/papéis do novo projeto) |
-| Status · Responsável · Data · Comentários · Observadores · Dependências · Recorrência | **RESETAR/REMOVER** (responsável e datas por último) |
+| Status · Responsável · Data · Comentários · Observadores · Recorrência | **RESETAR/REMOVER** (responsável e datas por último) |
+| Dependências entre atividades | **NÃO copiadas** (IDs mudam) — recriar manualmente pós-duplicação via MCP se a origem tiver `waiting_on` (ver seção abaixo) |
 | Relacionamento (list_relationship) | **NÃO copiar** — revincular ao novo card/marco |
 | Prioridade | **`normal`** por padrão (salvo pedido diferente) |
 | Idioma | **por cliente** — Kleber Meireles = **Inglês**; demais = Português |
@@ -112,6 +113,40 @@ Exemplo pronto: `scripts/config_tsap_mba.json` (Agência EU → Telesapiens).
 | Checklists | recriar como **checklist NATIVO** (nunca subtarefa — subtarefa polui relatório) |
 | Docs | criar **um Doc novo por Doc da origem** (replica TODOS, não só o 1º), nomeado pelo Doc de origem (sufixo trocado), com **link pro doc de referência anterior**; idempotência por nome |
 | Seção "Atividades" na descrição do marco | acrescentar links (nome→task, 1 por linha) das atividades relacionadas; preserva briefing, idempotente, pula marco sem atividades |
+
+## Dependências entre atividades (pós-duplicação)
+
+O engine **não copia** dependências: os IDs de task mudam na duplicação, então as referências da
+origem apontariam para tasks erradas. Se o projeto-origem tiver `waiting_on` entre atividades,
+é necessário recriá-las manualmente **após** o `--apply`.
+
+**Quando aplicar:** projetos perpétuos e lançamentos que têm cadeia Copy → Layout/Arte/Agendamento.
+Verifique se a origem tem dependências lendo qualquer atividade com `include=["dependencies"]`.
+
+**Workflow (3 passos via MCP):**
+
+1. **Ler as arestas da origem** — para cada atividade do projeto-origem:
+   ```
+   clickup_get_task(task_id="<id_origem>", include=["dependencies"])
+   ```
+   Anote as arestas: `task_id` (dependente) → `depends_on` (pré-requisito), `type` (1 = waiting_on).
+
+2. **Mapear origem → destino** — o nome da task é idêntico, só a sigla do cliente muda
+   (ex.: `[LL]` → `[ET]`). Use `clickup_search` ou a lista de tasks já coletadas durante a
+   duplicação para obter os IDs destino correspondentes.
+
+3. **Criar as dependências no destino** — para cada aresta (todas independentes; envie em paralelo):
+   ```
+   clickup_add_task_dependency(
+     task_id="<id_destino_dependente>",
+     depends_on="<id_destino_prerequisito>",
+     type="waiting_on"
+   )
+   ```
+
+**Verificação:** releia as tasks dependentes com `include=["dependencies"]` e confirme que
+`depends_on` aponta para o ID correto no destino. Tasks com 2 pré-requisitos (ex.: "Criar Grupos"
+espera "Copy Config. Grupos" e "Arte para Grupos") devem aparecer com 2 entradas.
 
 ## Documentos de referência (Docs nativos)
 - Uma atividade de copy pode ter **vários** ClickUp Docs (`parent type 1`) — ex.: Aula Magna →
