@@ -79,6 +79,10 @@ engine aceita 3 chaves extras no config:
   cross-workspace: sem ele as atividades seriam recriadas de volta na origem.
 - `task_type_map` — `{ "<custom_item_id origem>": <id destino> }`. Os **tipos de tarefa diferem entre
   workspaces** (ex.: 1008=Atividade na Agência EU, mas 1008=WhatsApp no Telesapiens). Não mapeado → tarefa padrão.
+- A normalização por nome (`task_type_rules`) resolve o tipo **por nome no workspace destino**, então é
+  **no-op seguro no cross-workspace**: se o destino não tiver um tipo "Copy"/"Criativo", a regra não se
+  aplica e o fluxo cai em `task_type_map`/tipo da origem. Para forçar tipos por nome no destino, ajuste
+  `task_type_rules` com nomes que existam lá.
 
 **Antes de rodar, colha os IDs do DESTINO** (todos por-workspace, diferentes da origem):
 - Listas de fase e de processo do destino → `phase_map[].dst` e `activity_map`.
@@ -103,6 +107,7 @@ Exemplo pronto: `scripts/config_tsap_mba.json` (Agência EU → Telesapiens).
 | Atributo | Ação |
 |---|---|
 | Etiqueta · Tipo (Milestone) · Campos personalizados | **MANTER** (setar Cliente/Produto/Idioma/Empresa/papéis do novo projeto) |
+| Tipo da **atividade** (custom_item_id) | **NORMALIZAR por nome** (padrão Exos): "Copy …" → **Copy**, "Criativo(s) …" → **Criativo** (Copy prevalece p/ "Copy Criativos"). A regra por **nome** sobrepõe o tipo herdado da origem (mesmo se a origem está como "Atividade"); quem não casa nenhuma regra mantém o tipo da origem. Tipo resolvido por **nome** no workspace destino. Configurável via `task_type_rules` (`[]` desliga). Com `update_existing`, conserta também o tipo de atividades já existentes (auto-heal em re-run). |
 | Status · Responsável · Data · Comentários · Observadores · Recorrência | **RESETAR/REMOVER** (responsável e datas por último) |
 | Dependências entre atividades | **NÃO copiadas** (IDs mudam) — recriar manualmente pós-duplicação via MCP se a origem tiver `waiting_on` (ver seção abaixo) |
 | Relacionamento (list_relationship) | **NÃO copiar** — revincular ao novo card/marco |

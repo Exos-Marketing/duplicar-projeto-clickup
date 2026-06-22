@@ -62,6 +62,32 @@ def norm_name(name, ssuf, dsuf, swaps):
 def norm_desc(text, swaps, exp):
     return swap_expert(apply_name_swaps(text or "", swaps), exp)
 
+# ---------- normalizacao de tipo de task (custom_item_id) ----------
+# tipos de task resolvidos por NOME (cache por workspace) — robusto e seguro cross-workspace
+_type_cache = {}
+def type_name_to_id(ws, name):
+    ws = str(ws)
+    if ws not in _type_cache:
+        c, b = api("GET", f"/api/v2/team/{ws}/custom_item")
+        m = {}
+        if c == 200 and isinstance(b, dict):
+            for it in b.get("custom_items", []) or []:
+                if it.get("name"): m[it["name"].strip().lower()] = it["id"]
+        _type_cache[ws] = m
+    return _type_cache[ws].get((name or "").strip().lower())
+
+# regra-padrao Exos: 1a que casa vence (Copy tem prioridade sobre Criativo p/ "Copy Criativos …")
+DEFAULT_TYPE_RULES = [
+    {"prefix": "Copy",       "type": "Copy"},
+    {"contains": "Criativo", "type": "Criativo"},   # cobre "Criativos" e "Criativo"
+]
+def type_for_name(name, rules):
+    nl = (name or "").strip().lower()
+    for r in rules:
+        if r.get("prefix")   and nl.startswith(r["prefix"].lower()):   return r["type"]
+        if r.get("contains") and r["contains"].lower() in nl:          return r["type"]
+    return None
+
 # ---------- discovery ----------
 def list_tasks(list_id):
     out, page = [], 0
@@ -325,6 +351,7 @@ def execute(plan, apply, docs_only=False):
     card, tag, prio = tgt["card_id"], tgt.get("tag"), tgt.get("priority")
     fields = cfg["fields"]; dcfg = cfg.get("docs", {})
     ttmap = cfg.get("task_type_map")   # cross-workspace: traduz custom_item_id de atividade (src->dst); dropa se nao mapeado
+    type_rules = cfg.get("task_type_rules", DEFAULT_TYPE_RULES)   # normaliza tipo por nome (Copy/Criativo); [] desliga
     docs_on = dcfg.get("enabled"); doclabel = dcfg.get("reference_label", "Documento de referência")
     ssuf = (cfg.get("source") or {}).get("suffix", ""); dsuf = tgt.get("suffix", ""); exp = cfg.get("expert_swap", {})
     swaps = cfg.get("name_swaps")
@@ -369,12 +396,21 @@ def execute(plan, apply, docs_only=False):
             aid = find_by_name(adst, a["new_name"]) if adst else None
             if aid:
                 st["ativ_skip"] += 1
+                if upd and apply and not docs_only:   # auto-heal: normaliza tipo de atividade ja existente
+                    rn = type_for_name(a["new_name"], type_rules)
+                    if rn:
+                        rid = type_name_to_id(DST_WS, rn)
+                        if rid: api("PUT", f"/api/v2/task/{aid}", {"custom_item_id": rid})
             else:
                 if not docs_only: print(f"    + ativ {a['new_name'][:48]}")
                 if apply and not docs_only and adst:
                     body = {"name": a["new_name"], "description": a["description"], "tags": [tag] if tag else []}
                     tt = a.get("task_type")
                     if ttmap is not None: tt = ttmap.get(str(tt))   # traduz/dropa tipo no cross-workspace
+                    rn = type_for_name(a["new_name"], type_rules)   # normalizacao por nome (padrao Exos)
+                    if rn:
+                        rid = type_name_to_id(DST_WS, rn)
+                        if rid: tt = rid                            # regra por nome PREVALECE sobre o tipo da origem
                     if tt: body["custom_item_id"] = tt
                     c, t = api("POST", f"/api/v2/list/{adst}/task", body)
                     aid = t.get("id") if c == 200 else None
