@@ -57,5 +57,5 @@
     ["[RS][POS][FEV][25]", "[KM][PEP][APB][26]"],
     ["[RS][POS][POS][26]", "[KM][PEP][APB][26]"]
   ],
-  "docs": {"enabled": true, "reference_label": "Documento de referência (anterior)"}
+  "docs": {"enabled": true, "reference_label": "Referência"}
 }

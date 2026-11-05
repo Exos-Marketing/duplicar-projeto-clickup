@@ -11,7 +11,7 @@ Uso:
   python3 duplicar_projeto.py execute --plan plano.json            # dry-run
   python3 duplicar_projeto.py execute --plan plano.json --apply    # escreve de verdade
 """
-import os, sys, json, time, re, argparse, urllib.request, urllib.error
+import os, sys, json, time, re, argparse, unicodedata, urllib.request, urllib.error
 
 TOKEN = os.environ.get("CLICKUP_TOKEN", "")
 WS = "9013012202"     # workspace padrao (fallback p/ configs antigos same-workspace)
@@ -61,6 +61,18 @@ def norm_name(name, ssuf, dsuf, swaps):
 
 def norm_desc(text, swaps, exp):
     return swap_expert(apply_name_swaps(text or "", swaps), exp)
+
+def _norm_ascii(s):
+    """lower + remove acentos — p/ casar nomes de marco de forma robusta (ex.: achar o marco
+    de 'Planejamento Estratégico' independente de caixa/acento)."""
+    s = unicodedata.normalize("NFKD", s or "")
+    return "".join(c for c in s if not unicodedata.combining(c)).lower()
+
+def is_central_de_links(name):
+    """Casa o Doc 'Central de Link'/'Central de Links' (variacao vista no historico),
+    caixa/acento-insensivel. Esse Doc e compartilhado com a equipe/expert e recebe o link do
+    Planejamento Estrategico como primeira linha (ver make_docs/create_doc)."""
+    return _norm_ascii(name).strip().startswith("central de link")
 
 # ---------- normalizacao de tipo de task (custom_item_id) ----------
 # tipos de task resolvidos por NOME (cache por workspace) — robusto e seguro cross-workspace
@@ -286,10 +298,29 @@ def has_doc_named(tid, name):
             if (d.get("name") or "").strip() == nm: return True
     return False
 
-def make_docs(tid, obj, ssuf, dsuf, exp, label, apply, st, who, swaps=None):
+def dst_doc_url(tid, name):
+    """URL canonica (docs/{did}/pages[0]) de um Doc JA existente NO DESTINO, casando pelo nome.
+    Espelha task_doc_url mas lendo de DST_WS. Usado no re-run p/ escrever a linha do doc na
+    descricao mesmo quando o doc nao e recriado. -> url (str) ou None."""
+    c, b = api("GET", f"/api/v3/workspaces/{DST_WS}/docs?parent_id={tid}&parent_type=1")
+    if c == 200 and isinstance(b, dict):
+        nm = (name or "").strip()
+        for d in (b.get("docs") or []):
+            if (d.get("name") or "").strip() == nm:
+                cp, pg = api("GET", f"/api/v3/workspaces/{DST_WS}/docs/{d['id']}/pages")
+                pid = pg[0]["id"] if (cp == 200 and isinstance(pg, list) and pg) else None
+                return f"https://app.clickup.com/{DST_WS}/docs/{d['id']}/{pid}" if pid else None
+    return None
+
+def make_docs(tid, obj, ssuf, dsuf, exp, label, apply, st, who, swaps=None, write_link=False, planej_url=None):
     """Replica TODOS os docs da origem (obj.ref_docs) na task destino, cada um nomeado pelo
     doc de origem (sufixo trocado) e com link de referencia. Idempotente por nome.
-    Compat: se o plano so tiver ref_doc_url (formato antigo), cria 1 doc com o nome da task."""
+    Compat: se o plano so tiver ref_doc_url (formato antigo), cria 1 doc com o nome da task.
+    Se write_link=True (so tasks de Copy/atividade), anexa na descricao da task uma linha
+    '{nome do doc} — {URL canonica no DST}' por doc (preserva o briefing; idempotente por URL).
+    Se o doc for a 'Central de Link(s)' (compartilhada com a equipe) e planej_url estiver
+    resolvido, o Doc nasce com 'Planejamento estratégico: {planej_url}' como PRIMEIRA linha,
+    pra equipe/expert acharem o planejamento assim que abrirem o Doc."""
     refs = obj.get("ref_docs")
     pairs = []
     if refs:
@@ -300,46 +331,92 @@ def make_docs(tid, obj, ssuf, dsuf, exp, label, apply, st, who, swaps=None):
         nm = obj.get("new_name") or doc_ref_name(obj.get("ref_doc_name") or "", ssuf, dsuf, exp)
         pairs.append((nm, obj["ref_doc_url"]))
     for dname, url in pairs:
+        doc_url = None
+        extra_line = f"Planejamento estratégico: {planej_url}" if (planej_url and is_central_de_links(dname)) else None
         if tid and has_doc_named(tid, dname):
             st["doc_skip"] += 1
+            if write_link and apply: doc_url = dst_doc_url(tid, dname)
         else:
             print(f"      doc -> {who}  ::  {dname[:48]}")
             if apply and tid:
-                if create_doc(tid, dname, url, label): st["doc_new"] += 1
+                doc_url = create_doc(tid, dname, url, label, extra_line)
+                if doc_url: st["doc_new"] += 1
             else:
                 st["doc_new"] += 1
+        if write_link and tid:
+            if doc_url:
+                append_doc_link(tid, dname, doc_url, apply)
+            elif not apply:
+                print(f"      descr doc-link -> {dname[:40]}  (linha do doc na descricao da task)")
 
-def create_doc(tid, name, ref_url, label):
+def create_doc(tid, name, ref_url, label, extra_line=None):
     c, doc = api("POST", f"/api/v3/workspaces/{DST_WS}/docs",
                  {"name": name, "parent": {"id": tid, "type": 1}, "visibility": "PUBLIC", "create_page": True})
-    if c not in (200, 201) or not isinstance(doc, dict): return False
+    if c not in (200, 201) or not isinstance(doc, dict): return None
     did = doc["id"]
     cp, pg = api("GET", f"/api/v3/workspaces/{DST_WS}/docs/{did}/pages")
     pid = pg[0]["id"] if (cp == 200 and isinstance(pg, list) and pg) else None
-    content = f"**{label}:** [{ref_url}]({ref_url})" if ref_url else "_(documento de trabalho)_"
+    # corpo do Doc de entrega: Briefing (esqueleto vazio — o Claude preenche na validacao) + Referencia
+    # (link do doc anterior/origem). label default = "Referência".
+    if ref_url:
+        content = f"**Briefing:**\n\n**{label}:** [{ref_url}]({ref_url})"
+    else:
+        content = "**Briefing:**\n\n_(documento de trabalho)_"
+    # extra_line (Central de Link(s)): vai ANTES do Briefing — e o primeiro item que a equipe ve.
+    if extra_line:
+        content = extra_line + "\n\n" + content
     if pid:
         api("PUT", f"/api/v3/workspaces/{DST_WS}/docs/{did}/pages/{pid}",
             {"name": name, "content": content, "content_format": "text/md", "content_edit_mode": "replace"})
-    return True
+    return f"https://app.clickup.com/{DST_WS}/docs/{did}/{pid}" if pid else None
 
 ATIV_SENTINEL = "**Atividades**"  # linha-marca da secao auto (distinta de "Atividades:" do briefing)
 
 def append_atividades(tid, acts, apply):
-    """Acrescenta/atualiza na descricao do marco uma secao 'Atividades' com os links
-    (nome com hyperlink) das tasks relacionadas, uma por linha. Idempotente: se a
-    linha-marca ja existir, corta dali pra baixo e regrava. Preserva o briefing acima.
-    acts: lista de (task_id_destino, nome_destino)."""
+    """Acrescenta/atualiza na descricao do marco uma secao 'Atividades' com as tasks
+    relacionadas, uma por linha no formato 'Titulo — URL' (titulo a esquerda, URL crua
+    clicavel a direita). Idempotente: se a linha-marca ja existir, corta dali pra baixo
+    e regrava. Preserva o briefing acima. acts: lista de (task_id_destino, nome_destino)."""
     acts = [(aid, nm) for aid, nm in acts if aid]
     if not acts:
         return
     section = ATIV_SENTINEL + "\n" + "\n".join(
-        f"[{nm}](https://app.clickup.com/t/{aid})" for aid, nm in acts)
+        f"{nm} — https://app.clickup.com/t/{aid}" for aid, nm in acts)
     if not apply:
         return
     c, t = api("GET", f"/api/v2/task/{tid}?include_markdown_description=true")
     cur = (t.get("markdown_description", "") if isinstance(t, dict) else "") or ""
     base = cur.split(ATIV_SENTINEL)[0].rstrip() if ATIV_SENTINEL in cur else cur.rstrip()
     new_desc = (base + "\n\n" + section).lstrip("\n")
+    api("PUT", f"/api/v2/task/{tid}", {"markdown_content": new_desc})
+
+def append_doc_link(tid, doc_name, doc_url, apply):
+    """Anexa na descricao da task (Copy) UMA linha rotulada
+    'Documento(s) de entrega: {doc_name} — {doc_url}' abaixo do briefing herdado, onde doc_url e a
+    URL canonica do Doc nativo no DST. Idempotente: se doc_url ja estiver na descricao, nao faz nada
+    (a URL canonica docs/{did}/{pid} e permanente e NAO colide com links doc-view manuais
+    '.../v/dc/{shortid}' do briefing)."""
+    if not (apply and doc_url):
+        return
+    c, t = api("GET", f"/api/v2/task/{tid}?include_markdown_description=true")
+    cur = (t.get("markdown_description", "") if isinstance(t, dict) else "") or ""
+    if doc_url in cur:
+        return
+    new_desc = (cur.rstrip() + f"\n\nDocumento(s) de entrega: {doc_name} — {doc_url}").lstrip("\n")
+    api("PUT", f"/api/v2/task/{tid}", {"markdown_content": new_desc})
+
+def append_planejamento(tid, planej_url, apply):
+    """Anexa na descricao da task (Copy) UMA linha 'Planejamento estratégico: {planej_url}',
+    onde planej_url e a URL do MARCO de Planejamento Estratégico no ClickUp (app.clickup.com/t/{id}),
+    nao o embed do Whimsical. Idempotente por URL. Roda no sweep final (todas as copies apontam
+    para o mesmo marco de planejamento do projeto)."""
+    if not (apply and planej_url):
+        return
+    c, t = api("GET", f"/api/v2/task/{tid}?include_markdown_description=true")
+    cur = (t.get("markdown_description", "") if isinstance(t, dict) else "") or ""
+    if planej_url in cur:
+        return
+    new_desc = (cur.rstrip() + f"\n\nPlanejamento estratégico: {planej_url}").lstrip("\n")
     api("PUT", f"/api/v2/task/{tid}", {"markdown_content": new_desc})
 
 def execute(plan, apply, docs_only=False):
@@ -352,13 +429,23 @@ def execute(plan, apply, docs_only=False):
     fields = cfg["fields"]; dcfg = cfg.get("docs", {})
     ttmap = cfg.get("task_type_map")   # cross-workspace: traduz custom_item_id de atividade (src->dst); dropa se nao mapeado
     type_rules = cfg.get("task_type_rules", DEFAULT_TYPE_RULES)   # normaliza tipo por nome (Copy/Criativo); [] desliga
-    docs_on = dcfg.get("enabled"); doclabel = dcfg.get("reference_label", "Documento de referência")
+    docs_on = dcfg.get("enabled"); doclabel = dcfg.get("reference_label", "Referência")
     ssuf = (cfg.get("source") or {}).get("suffix", ""); dsuf = tgt.get("suffix", ""); exp = cfg.get("expert_swap", {})
     swaps = cfg.get("name_swaps")
     upd = cfg.get("update_existing")
+    # marco de Planejamento Estratégico: casa por NOME (acento/caixa-insensível). Override no config.
+    planej_match = _norm_ascii(cfg.get("planejamento_marco", "planejamento estrategico"))
+    planej_mid = None; planej_name = None; planej_url = None; copy_ids = []   # copy_ids: tasks de Copy p/ o link do planejamento
     st = {"marco_new": 0, "marco_skip": 0, "marco_upd": 0, "ativ_new": 0, "ativ_skip": 0, "doc_new": 0, "doc_skip": 0}
     print(f"== EXECUTE [{'APLICANDO' if apply else 'DRY-RUN'}] ==")
-    for m in plan["marcos"]:
+    _pj_preview = next((mm["new_name"] for mm in plan["marcos"] if planej_match in _norm_ascii(mm["new_name"])), None)
+    if _pj_preview:
+        print(f"  (planejamento estratégico casará com marco: {_pj_preview[:50]})")
+    else:
+        print(f"  (! nenhum marco casa 'Planejamento Estratégico' (match='{planej_match}') — copies ficarão sem essa linha)")
+
+    def process_marco(m):
+        nonlocal planej_mid, planej_name, planej_url
         mid = find_by_name(m["dst_list"], m["new_name"])
         if mid:
             st["marco_skip"] += 1
@@ -387,9 +474,17 @@ def execute(plan, apply, docs_only=False):
                     ensure_checklists(mid, m["checklists"])
                     if prio: api("PUT", f"/api/v2/task/{mid}", {"priority": prio})
             st["marco_new"] += 1
+        # marco de Planejamento Estratégico (link vai em TODAS as copies no sweep final e no Doc
+        # "Central de Link(s)" — resolvido AQUI, antes de qualquer criacao de doc, porque os marcos
+        # sao reordenados (ver fim do execute) pra este ser sempre o 1o processado.
+        if mid and planej_mid is None and planej_match in _norm_ascii(m["new_name"]):
+            planej_mid = mid; planej_name = m["new_name"]
+            planej_url = f"https://app.clickup.com/t/{mid}"
+            print(f"      planejamento estratégico -> marco {m['new_name'][:44]} ({mid})")
         # documentos de referencia no proprio marco (replica TODOS os docs da origem)
         if docs_on:
-            make_docs(mid, m, ssuf, dsuf, exp, doclabel, apply, st, "marco " + m["new_name"][:30], swaps)
+            make_docs(mid, m, ssuf, dsuf, exp, doclabel, apply, st, "marco " + m["new_name"][:30], swaps,
+                      planej_url=planej_url)
         acts_for_marco = []   # (id_destino, nome) p/ a secao "Atividades" na descricao do marco
         for a in m["activities"]:
             adst = a.get("dst_list") or a.get("src_list")   # destino (cross-workspace via activity_map)
@@ -428,13 +523,37 @@ def execute(plan, apply, docs_only=False):
                 st["ativ_new"] += 1
             if aid:
                 acts_for_marco.append((aid, a["new_name"]))
+                # tasks de Copy (por nome): recebem o link do marco de Planejamento no sweep final
+                if type_for_name(a["new_name"], type_rules) == "Copy" and aid not in copy_ids:
+                    copy_ids.append(aid)
             # documentos de trabalho (replica TODOS os docs da origem da atividade)
             if docs_on:
-                make_docs(aid, a, ssuf, dsuf, exp, doclabel, apply, st, a["new_name"][:36], swaps)
+                make_docs(aid, a, ssuf, dsuf, exp, doclabel, apply, st, a["new_name"][:36], swaps,
+                          write_link=True, planej_url=planej_url)
         # secao "Atividades" (links das tasks relacionadas) na descricao do marco
         if mid and acts_for_marco and not docs_only:
             print(f"      secao Atividades -> marco {m['new_name'][:40]} ({len(acts_for_marco)} links)")
             append_atividades(mid, acts_for_marco, apply)
+
+    # processa o marco de Planejamento Estratégico PRIMEIRO (se existir no plano), independente da
+    # posicao original (a ordem da API nao e garantida) — assim planej_url ja esta resolvido quando
+    # o Doc "Central de Link(s)" (que normalmente vive nesse marco) for criado.
+    ordered = list(plan["marcos"])
+    pj_idx = next((i for i, mm in enumerate(ordered) if planej_match in _norm_ascii(mm["new_name"])), None)
+    if pj_idx is not None and pj_idx != 0:
+        ordered.insert(0, ordered.pop(pj_idx))
+    for m in ordered:
+        process_marco(m)
+
+    # sweep final: link do marco de Planejamento Estratégico em TODAS as tasks de Copy (escrita, nao embed)
+    if not docs_only and copy_ids:
+        if planej_mid:
+            print(f"\n  Planejamento estratégico -> {planej_name} ({planej_url}) em {len(copy_ids)} copy(s)")
+            for cid in copy_ids:
+                append_planejamento(cid, planej_url, apply)
+        else:
+            print(f"\n  ! marco 'Planejamento Estratégico' nao encontrado "
+                  f"(match='{planej_match}') — linha de planejamento nao adicionada nas {len(copy_ids)} copy(s)")
     print("\n==== RESUMO EXECUTE ====")
     print(json.dumps(st, indent=2, ensure_ascii=False))
 

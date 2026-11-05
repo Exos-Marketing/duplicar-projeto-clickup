@@ -53,6 +53,10 @@ LS=Lançamento Semente — use o que o usuário indicar.)
 
 **Mês:** JAN FEV MAR ABR MAI JUN JUL AGO SET OUT NOV DEZ · **Ano:** 2 dígitos (26).
 
+**Campanhas de tráfego (Meta/Google):** `[PGL][SIGLA][TIPO][PRODUTO][MÊS][ANO][FASE] Texto livre` — a mesma tag
+do projeto, contígua, mais **um** marcador de fase logo após o ano. O dash (`dash.exosmkt.com`) lê projeto e fase
+pelo nome. Tabela de marcadores, conjuntos de anúncio, UTM e tasks de campanha em [TRAFEGO.md](TRAFEGO.md).
+
 ## 4. Custom fields (IDs fixos)
 
 Setar via `clickup_create_task`/`clickup_update_task` → `custom_fields:[{id, value}]`.
@@ -143,3 +147,29 @@ Resolver nomes→ids com `clickup_resolve_assignees` / `clickup_find_member_by_n
 5. ✅ **Subtarefa**: `parent:"<id_marco>"` coloca a atividade dentro do marco.
 6. ⚠️ **Tipo padrão da lista = Milestone**: tarefa criada SEM `task_type` sai como *milestone*. Para
    uma **atividade** que não deva ser marco, passe `task_type` explícito da origem (ex.: `"Task"`).
+
+## 9. Status, etiquetas e pessoas (levantado em out/26)
+
+**Status por lista** (nome exato, em minúsculas na API):
+- **Processo de Copywriting `901301657744`, Design & Criação `901301657750` e Agendamentos `901301657745`:**
+  para fazer → em andamento → **em revisão** → em aprovação → em alteração & ajuste → aguardando informação →
+  **descartados** (fechado) → finalizada.
+  - O `skip_status` do config precisa do plural `descartados`.
+- **Gestão de Campanhas `901301657760`:** para fazer → em andamento → solicitar criativos → em análise →
+  em veiculação → em otimização → otimização realizada → pausada → descartado → finalizada.
+- **Fases de perpétuo:**
+  - Concepção: … em revisão → em aprovação → alteração & ajuste → aguardando informação → declinado → finalizado.
+  - Setup: a mesma sequência, com "em alteração & ajuste" e "descartado".
+- **Painel Perpétuos `901312155462`:** backlog → iniciação → planejamento → execução → monitoramento →
+  encerramento → pausado → descartado → finalizado.
+
+**Idioma:** a opção chama **"Espanhol "**, com espaço no fim. Use sempre o UUID `1f81ad4f-6b1c-4657-a2aa-d44c0b197c42`,
+nunca o nome.
+
+**Etiquetas:**
+- `latam` existe nos spaces Projetos e Marketing; `internacional` só no Marketing. Todas são minúsculas.
+- Etiqueta com acento (`perpétuo`) vai **codificada** na URL de `POST /task/{id}/tag/{nome}`. Crua, falha calada.
+
+**Ex-membros em campo de pessoa:**
+- Matheus Dias `49078977` e Adrian Schultz `60931770` não estão mais no workspace. Gravar os dois devolve 200 e deixa o campo vazio.
+- No `[ET][PEP][ESP][MCE][26]`, o Cleber decidiu substituir pelo Maurício (`substituir_usuarios` do acabamento).

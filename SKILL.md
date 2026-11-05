@@ -1,6 +1,6 @@
 ---
 name: duplicar-projeto-clickup
-description: Duplica/cria projetos no ClickUp da agência Exos a partir de um projeto-origem, de forma API-first com o engine duplicar_projeto.py — recria marcos (milestones), atividades (tasks linkadas), campos personalizados, checklists nativos, Docs de referência e prioridade, com a nomenclatura [SIGLA][TIPO][PRODUTO][MÊS][ANO] e a hierarquia Atividade→Marco→Projeto. Flexível: lê a origem dinamicamente e gera um plano editável (adaptável a novos formatos/eventos). Use quando o usuário pedir para duplicar, replicar ou criar um projeto/lançamento/perpétuo/reunião secreta/evento no ClickUp, ou disser "duplica o projeto de X pra Y", "novo lançamento", "replica o lançamento de fevereiro", "cria o projeto da Daniela", "monta o projeto a partir do modelo". Também replica ENTRE workspaces diferentes (ex.: da Agência EU para o workspace de um cliente) — gatilhos: "replica pra outro workspace", "monta esse projeto no workspace do cliente", "duplica pro workspace da Telesapiens", "leva esse lançamento pro workspace X".
+description: Duplica/cria projetos no ClickUp da Exos a partir de um projeto-origem, API-first com o engine duplicar_projeto.py — recria marcos, atividades linkadas, campos, checklists nativos, Docs de referência e prioridade, com a nomenclatura [SIGLA][TIPO][PRODUTO][MÊS][ANO] e a hierarquia Atividade→Marco→Projeto; lê a origem e gera um plano editável. Inclui o padrão do Planejamento de Tráfego (nomes de campanha [PGL][SUFIXO][FASE], conjuntos, UTM, tasks de campanha) e o conferidor checar_trafego.py. Use quando o usuário pedir para duplicar, replicar ou criar um projeto/lançamento/perpétuo/reunião secreta/evento no ClickUp ("duplica o projeto de X pra Y", "novo lançamento", "cria o projeto da Daniela", "monta o projeto a partir do modelo"), para replicar ENTRE workspaces ("monta esse projeto no workspace do cliente", "duplica pro workspace da Telesapiens") ou para montar/conferir a nomenclatura das campanhas de tráfego de um projeto ("confere os nomes das campanhas", "planejamento de tráfego no padrão").
 ---
 
 # Duplicar / Criar Projeto no ClickUp (Exos)
@@ -32,6 +32,11 @@ O **MCP `clickup`** é usado para **descoberta e confirmação conversacional**.
 2. **Config**: criar/editar `config_<projeto>.json` (base: `config_km_apb.json`) com `source` (sufixo
    + listas de fase), `target` (sufixo, card, tag, prioridade), `phase_map` (fase→lista destino + rel
    field), `fields` (Cliente/Produto/Idioma/Empresa + papéis), `expert_swap`, `docs`. IDs em REFERENCE.md.
+   **`name_swaps` com o par `[tag origem] → [tag destino]`** sempre que a origem tiver o Planejamento de Tráfego
+   no padrão: as campanhas `[PGL][SUFIXO][FASE]` dentro das **descrições** só trocam de tag por `name_swaps`
+   (ver [TRAFEGO.md](TRAFEGO.md) §7).
+   Opcional: `planejamento_marco` (string p/ casar o marco de planejamento; default `"planejamento
+   estratégico"` — só ajuste se o marco tiver outro nome no projeto).
 3. **`discover`** (read-only) → gera `plano.json` (marcos, atividades, docs de referência, checklists).
    **Edite o plano** para adaptar a formatos novos — é o ponto de flexibilidade (modelo-base + ajuste).
 4. **Dry-run** `execute --plan plano.json` → **mostre ao usuário** o que será criado. **Confirme.**
@@ -40,16 +45,28 @@ O **MCP `clickup`** é usado para **descoberta e confirmação conversacional**.
    marco, checklist, prioridade, troca de expert→cliente, fix do `[ID]` no nome/descrição) e **Docs**
    (**TODOS** os docs que a atividade/marco tinha na origem — uma task de copy pode ter vários, ex.:
    Slides + Script + Atendimento —, cada Doc novo **nomeado pelo nome do Doc de origem** com o sufixo
-   trocado p/ o destino, com **link pro doc de referência anterior**; doc **e** página já nascem
-   **nomeados** — não abrem como "Sem título"). Idempotência dos docs é **por nome** (permite vários
-   docs distintos na mesma task).
+   trocado p/ o destino; doc **e** página já nascem **nomeados** — não abrem como "Sem título"). O
+   **corpo** de cada Doc novo nasce com `**Briefing:**` (vazio — o Claude preenche depois) +
+   `**Referência:** [URL]` apontando pro Doc anterior/origem. Idempotência dos docs é **por nome**
+   (permite vários docs distintos na mesma task). Além disso, em cada **task de Copy** o engine escreve
+   na **descrição** — abaixo do briefing herdado — linhas **rotuladas** e **por escrito** (URL de texto,
+   não embed): `Documento(s) de entrega: {nome do Doc} — {URL canônica}` (uma por Doc, idempotente **por
+   URL**) e, no **sweep final**, `Planejamento estratégico: {URL do marco}` (o marco de **Planejamento
+   Estratégico** do próprio projeto — casado por nome, **não** o link do Whimsical) em **todas** as
+   copies. Não toca a descrição dos marcos.
    Ao final de cada marco, **acrescenta na descrição uma seção `Atividades`** com os links (nome com
    hyperlink, um por linha) das atividades relacionadas — preserva o briefing e é idempotente (linha-marca
    `**Atividades**`, distinta de "Atividades:" do briefing; marcos sem atividades são pulados).
    **Idempotente** (pula o que já existe por nome). `--docs-only` cria só os Docs.
-6. **Responsáveis e datas por último** (atribuir notifica a pessoa).
-7. **Verificar + relatório.**
-8. **Pasta do projeto no Google Drive** (após o projeto estar criado/verificado no ClickUp): criar a
+6. **Briefing + validação das copies**: preencher o `Briefing:` de cada Doc de entrega, **tirar o
+   briefing herdado da descrição** (task de copy não leva briefing na descrição) e conferir as
+   URLs/textos (ver seção **"Briefing + validação das atividades de copy"**).
+7. **Responsáveis e datas por último** (atribuir notifica a pessoa).
+8. **Verificar + relatório.** Inclui o **Planejamento de Tráfego**: `checar_trafego.py --marco <id> --campanhas`
+   confere os nomes de campanha do marco e das tasks de campanha contra o padrão
+   `[PGL][SIGLA][TIPO][PRODUTO][MÊS][ANO][FASE] Texto livre` ([TRAFEGO.md](TRAFEGO.md)). Depois o gestor de
+   tráfego preenche verba/período/públicos mantendo os nomes, e o Gabriel aprova no comentário do marco.
+9. **Pasta do projeto no Google Drive** (após o projeto estar criado/verificado no ClickUp): criar a
    pasta `[SIGLA][TIPO][PRODUTO][MÊS][ANO]` no Drive compartilhado do cliente (`1. Projetos → <ANO>`)
    com a **estrutura-modelo** de subpastas — onde a equipe sobe os documentos de copy pro expert.
    Via **MCP Google Drive** (não o engine). Procedimento e estrutura em [DRIVE.md](DRIVE.md).
@@ -62,6 +79,7 @@ SK=~/.claude/skills/duplicar-projeto-clickup/scripts   # cópia canônica do eng
 CLICKUP_TOKEN=$TOKEN python3 $SK/duplicar_projeto.py discover --config config_X.json --out plano.json
 CLICKUP_TOKEN=$TOKEN python3 $SK/duplicar_projeto.py execute  --plan plano.json            # dry-run
 CLICKUP_TOKEN=$TOKEN python3 $SK/duplicar_projeto.py execute  --plan plano.json --apply    # escreve
+CLICKUP_TOKEN=$TOKEN python3 $SK/checar_trafego.py --marco <id do marco> --campanhas      # nomes de campanha (read-only)
 ```
 Capacidades confirmadas: **v2** (criar/editar task, custom fields via `/task/{id}/field/{fid}`, link
 `/task/{id}/link/{links_to}`, checklist `/task/{id}/checklist` + items, prioridade); **v3 Docs** (criar
@@ -115,9 +133,14 @@ Exemplo pronto: `scripts/config_tsap_mba.json` (Agência EU → Telesapiens).
 | Idioma | **por cliente** — Kleber Meireles = **Inglês**; demais = Português |
 | Expert/cliente nas descrições | **trocar** o da origem pelo cliente atual (ex.: Elen Tolentino → Kleber Meireles) |
 | `[ID<taskid>]` no nome (tasks de Campanha) | trocar pelo **ID da nova task** (nome **e** descrição) |
+| Campanhas de tráfego (descrição do marco **Planejamento de Tráfego** e das tasks de **Campanha**) | nomes no padrão **`[PGL][SIGLA][TIPO][PRODUTO][MÊS][ANO][FASE] Texto livre`**: tag do projeto **contígua**, **um** marcador de fase **logo após o ano** (`[ANTECIPAÇÃO]` · `[CADASTROS]`(+`[TESTE]`) · `[RECONHECIMENTO]`+"CONTAGEM REGRESSIVA" · `[EVENTO]`/`[AULA]` · `[VENDAS]` · `[CARRINHO]` · `[DOWNSELL]` · `[PESQUISA]` · `[REABERTURA]`), temperatura (Frio/Quente) no texto livre — o dash lê projeto e fase pelo nome. Tag trocada via `name_swaps`; conferir com `checar_trafego.py`. Regras, conjuntos, UTM e modelo do marco em [TRAFEGO.md](TRAFEGO.md) |
 | Checklists | recriar como **checklist NATIVO** (nunca subtarefa — subtarefa polui relatório) |
-| Docs | criar **um Doc novo por Doc da origem** (replica TODOS, não só o 1º), nomeado pelo Doc de origem (sufixo trocado), com **link pro doc de referência anterior**; idempotência por nome |
+| Docs | criar **um Doc novo por Doc da origem** (replica TODOS, não só o 1º), nomeado pelo Doc de origem (sufixo trocado); **corpo** = `**Briefing:**` (vazio, o Claude preenche) + `**Referência:** [URL]` (Doc anterior/origem); idempotência por nome |
+| Doc **"Central de Link(s)"** (casado por nome, acento/caixa-insensível) | nasce com **`Planejamento estratégico: {URL da task}` como PRIMEIRA linha do conteúdo** (antes do Briefing) — link para o próprio marco de Planejamento Estratégico do projeto (a task no ClickUp, não o Whimsical). Esse Doc é **compartilhado com a equipe/expert**, então o planejamento precisa ser o primeiro item visível. Só na criação (doc já existente não é reescrito) |
 | Seção "Atividades" na descrição do marco | acrescentar links (nome→task, 1 por linha) das atividades relacionadas; preserva briefing, idempotente, pula marco sem atividades |
+| `Documento(s) de entrega:` na descrição da **task de Copy** | acrescentar, ABAIXO do briefing herdado, uma linha `Documento(s) de entrega: {nome do Doc} — {URL canônica}` por Doc nativo (`…/{DST_WS}/docs/{did}/{pid}`); URL **por escrito** (não embed); preserva o briefing, idempotente **por URL**; só em atividades com Doc; **marcos não recebem** |
+| `Planejamento estratégico:` na descrição da **task de Copy** | no **sweep final**, acrescentar `Planejamento estratégico: https://app.clickup.com/t/{marco}` em **todas** as copies (`type_for_name == Copy`), apontando pro marco **Planejamento Estratégico** do projeto (casado por nome, override `planejamento_marco`); URL do **marco** no ClickUp, **não** o Whimsical; idempotente **por URL**; se o marco não for achado, loga aviso e pula |
+| Briefing na descrição da **task de Copy** | **não leva** (regra de 04/11/26). O engine ainda copia a descrição da origem: o Claude tira o briefing herdado depois do `--apply` e deixa só as linhas `Documento(s) de entrega:` e `Planejamento estratégico:` (ver "Briefing + validação das atividades de copy") |
 
 ## Dependências entre atividades (pós-duplicação)
 
@@ -158,12 +181,116 @@ espera "Copy Config. Grupos" e "Arte para Grupos") devem aparecer com 2 entradas
   Slides + Script do Evento + Atendimento Zoom. O engine replica **TODOS** (não só o primeiro).
 - O **documento de referência = o Doc correspondente no projeto anterior** (a origem).
 - A duplicação cria **um Doc novo por Doc da origem**, cada um **nomeado pelo nome do Doc de origem**
-  (com o sufixo trocado p/ o destino; tolera sufixos divergentes/bagunçados via `doc_ref_name`) e com
-  um **link pro Doc da origem**. O engine acha os docs da origem (`task_docs`) e cria os novos
+  (com o sufixo trocado p/ o destino; tolera sufixos divergentes/bagunçados via `doc_ref_name`). O
+  **corpo** do Doc novo nasce com `**Briefing:**` (vazio — o Claude preenche depois) + `**Referência:**
+  [URL]` apontando pro Doc da origem. O engine acha os docs da origem (`task_docs`) e cria os novos
   automaticamente (`docs.enabled` no config). Idempotência **por nome do doc**.
 - ⚠️ A API **não renomeia nem apaga** Doc nativo (405). Por isso o nome certo é definido **na criação**;
   docs órfãos/duplicados (ex.: de projeto renomeado depois) precisam ser apagados **à mão**.
   Anexos/Canva externos ficam como pendência manual.
+- **Doc "Central de Link(s)"** (casado por nome — "central de link"/"central de links", variação vista
+  no histórico, acento/caixa-insensível): esse Doc é **compartilhado com a equipe/expert**, então nasce
+  com `Planejamento estratégico: {URL da task}` como **primeira linha**, antes do `**Briefing:**` —
+  link clicável (URL crua) para o próprio marco de Planejamento Estratégico do projeto (a task no
+  ClickUp, casada por nome via `planejamento_marco`/default `"planejamento estrategico"`; **não** o
+  Whimsical). Pra isso funcionar mesmo quando esse marco não é o primeiro na ordem retornada pela API,
+  o `execute` **reordena os marcos do plano** pra processar o de Planejamento Estratégico primeiro —
+  garantindo que a URL já esteja resolvida antes de qualquer Doc ser criado. Só se aplica **na criação**
+  do Doc (idempotência por nome do doc já existente não reescreve o conteúdo); Central de Link(s)
+  criados **antes** dessa mudança precisam da linha adicionada manualmente (`clickup_update_document_page`).
+- Nas **tasks de Copy**, além de criar o Doc nativo, o engine escreve na **descrição da task** (abaixo do
+  briefing herdado), **por escrito** (URL de texto, não embed): `Documento(s) de entrega: {nome do Doc} —
+  {URL canônica}` (`https://app.clickup.com/{DST_WS}/docs/{did}/{pid}`, uma linha por Doc) e, no sweep
+  final, `Planejamento estratégico: {URL do marco}`. Idempotência **por URL**: cada linha só é escrita se
+  a URL ainda não estiver na descrição, então não colide com links de doc-view manuais (`…/v/dc/{shortid}`)
+  do briefing e re-run não duplica. **Marcos não recebem** essas linhas.
+
+## Briefing + validação das atividades de copy (pós-`--apply`)
+O engine escreve os **rótulos + URLs** (determinístico); o **Briefing** e a **conferência** são do Claude.
+Depois do `--apply`, para **cada atividade de Copy** (independentes — pode paralelizar):
+
+1. **Preencher o Briefing** no Doc de entrega (o que fazer, em 1–2 linhas):
+   - Ler o **Doc de origem** (`clickup_get_document_pages` na URL de Referência) — **se houver** briefing
+     lá, adaptar as 1–2 linhas ao projeto atual; **se não houver**, adaptar o próprio doc de referência ao
+     projeto (o Claude já sabe montar). Gravar no Doc novo com `clickup_update_document_page` (substitui o
+     `**Briefing:**` vazio; **preserva** a linha `**Referência:**`).
+2. **Tirar o briefing da descrição** — regra de 04/11/26: **task de copy não leva briefing na
+   descrição**. O engine copia a descrição da origem; se ela trouxer briefing (`**Briefing:**` ou o mesmo
+   conteúdo com outro rótulo: o que escrever, resumo do planejamento, regras, alertas), regravar a
+   descrição só com as linhas `Documento(s) de entrega:` e `Planejamento estratégico:` do projeto novo
+   (`clickup_update_task`). Marcos e atividades que não são de copy mantêm o briefing.
+3. **Validar** (conferência final):
+   - `clickup_get_task(task_id, detalhado/markdown)` → confirmar que as URLs do(s) **Documento(s) de
+     entrega** **e** do **Planejamento estratégico** aparecem na descrição, **sem briefing**.
+   - `clickup_get_document_pages(doc)` no Doc de entrega → confirmar que o **Briefing** e a **URL de
+     Referência** estão no texto.
+   - **Se aparecer só o nome (embed/anexo) em vez da URL → colar a URL no texto** (editar a descrição via
+     `clickup_update_task` ou a página via `clickup_update_document_page`).
+
+## Versão em outro idioma (acabamento + tradução)
+Use quando o projeto novo for a **versão em outro idioma** de um projeto que já existe. Exemplos:
+`[ET][PEP][ESP][MCE][26]` a partir do `[ET][PEP][MCE][26]` (LatAm, espanhol) ou um projeto do KM em inglês.
+Também serve para qualquer duplicação que precise de campos **iguais aos da origem task a task**, de
+responsável/data por regra ou de status final.
+
+O engine faz a estrutura; os scripts abaixo (em `scripts/`) fazem o resto. Todos:
+- leem o mesmo `config_<projeto>.json` (blocos `acabamento`, `remap` e `traducao`);
+- são dry-run por padrão, escrevem com `--apply` e são idempotentes;
+- pegam o token no Keychain.
+
+Exemplo real: `/Users/cleberdelima/Documents/Exos/config_et_pep_esp_mce.json`.
+
+| Passo | Script | O que faz |
+|---|---|---|
+| 1 | `duplicar_seguro.py discover/execute` | Engine com 2 proteções: nunca monta índice parcial (página falhou → aborta) e não repete às cegas um POST de criação em 429/timeout (rechecа pelo nome). Use no lugar do engine cru. |
+| 2 | `espelhar_drive.py` | Espelha a **árvore de pastas** do projeto de origem no Drive (só pastas, `--excluir`). Grava o mapa origem→destino, que o passo 5 usa. |
+| 3 | `acabamento.py` | Campos copiados da origem task a task. Também: troca de usuário, etiquetas (origem + extras), responsáveis/vencimento/prioridade por regra (card/marco/ativ), reparo de vínculos e checklists e sweep de `start_date`. `--only status` roda no fim; `--verify` relê tudo. |
+| 4 | `recriar_dependencias.py` | Dependências da origem cujas duas pontas estão no plano. |
+| 5 | `remapear_descricoes.py` | Remonta a descrição das tasks **novas** a partir do markdown da origem e religa links de task, Doc e pasta do Drive. |
+| 6 | `traduzir_docs.py` | `pacotes` → subagentes traduzem para `es/NN_*.md` → `checar` (gates locais) → `aplicar` (grava com gates e releitura) → `verificar`. |
+
+**Ordem:**
+1. discover → ajuste do plano → dry-run → OK do usuário → apply (background);
+2. varredura de duplicatas → Drive → acabamento → dependências → remap;
+3. aplicar a tradução → `acabamento --only status` → `--verify`.
+
+A tradução (pacotes + subagentes) pode rodar **em paralelo desde o discover**, porque só depende da origem.
+
+**Chaves novas do config:**
+- `source.card_id`: card da origem; os campos dele vão para o card do destino.
+- `acabamento`:
+  - `reaproveitados`: itens criados antes, à mão; só recebem o que está **vazio**.
+  - Campos: `copiar_campos_origem`, `campos_override` `{field_id: valor}`, `substituir_usuarios` `{id_antigo: id_novo}`.
+  - Etiquetas: `copiar_etiquetas_origem`, `etiquetas_extra`.
+  - Regras: `regras` `{card|marco|ativ: {responsaveis, vencimento, prioridade}}`. `null` não mexe; `[]` deixa sem ninguém.
+  - Status: `status` `[{tipo|nome_comeca, status}]` e `status_exige_marcador_doc`.
+  - Outros: `checklists_nos_reaproveitados`, `indice_desde` (corte de data do índice).
+- `remap`: `nunca_escrever`, `linhas_topo` `{src_id: linha}`, `doc_extra`.
+- `traducao`:
+  - Pasta e idioma: `pasta`, `idioma`, `tratamento`.
+  - Cabeçalho do Doc: `briefing`, `marcador`.
+  - Conteúdo: `oferta`, `glossario`, `instrucoes_extra`.
+  - Links: `mapa_links`, `links_podem_sair`.
+  - Termos: `proibidos`, `evitar`, `pt_permitidos`.
+  - Docs especiais: `copiar_secao`, `texto_es_existente` (texto já no ar: arquivo ou seção da origem), `versao_no_ar`, `fora_da_oferta`.
+  - Gates: `gates`, `gates_por_doc`.
+
+**Gotchas** (out/26):
+- **Item reaproveitado com acento diferente da origem** ("Tráfego" × "Trafego"): ajuste o `new_name` no plano, em NFC. Senão, o engine cria uma duplicata.
+- **`skip_status`** precisa do plural **`descartados`**, que é o status fechado das listas do Marketing.
+- **Etiqueta com acento** (`perpétuo`) vai **codificada** na URL. Crua, falha calada.
+- **Ex-membro ou convidado em campo de pessoa:** a API devolve 200 e o campo fica vazio. Use `substituir_usuarios`.
+- **list_relationship nunca se copia da origem**: ele aponta para o card da origem.
+- **Doc de destino:**
+  - grave só se a página estiver vazia ou só com o cabeçalho do engine;
+  - use `PUT replace` sem `name`;
+  - releia depois;
+  - o status "em revisão" só vem **depois** do Doc relido.
+- **Não re-rode o engine depois do remap:** ele reescreve a seção Atividades dos marcos.
+- **Lista aninhada que começa com `*       *` some ao gravar:** esse padrão vem da exportação do próprio ClickUp. Ao
+  gravar, o ClickUp lê como bloco de código e descarta os itens. Reescreva como lista aninhada normal
+  (`*   item` + `    *   subitem`). O `aplicar` acusa isso na releitura ("releitura diverge").
+- **Domínio solto (`elentolentino.com.br`) vira link na gravação.** Os scripts já tratam isso como igual na comparação.
 
 ## Guardrails
 - **Nunca** criar pasta/lista **no ClickUp**. Nunca assumir a origem — sempre confirmar.
@@ -175,7 +302,14 @@ espera "Copy Config. Grupos" e "Arte para Grupos") devem aparecer com 2 entradas
 ## Referências
 - [REFERENCE.md](REFERENCE.md) — IDs de listas/fases, custom fields (+ opções), papel→pessoa, siglas, vínculos.
 - [DRIVE.md](DRIVE.md) — passo 8: pasta do projeto no Google Drive (estrutura-modelo, IDs por cliente, procedimento MCP).
+- [TRAFEGO.md](TRAFEGO.md) — Planejamento de Tráfego: nomenclatura das campanhas (padrão Gabriel 23/10/26 +
+  dash.exosmkt.com/convencoes), conjuntos de anúncio, UTM, tasks de campanha, modelo do marco e o que a duplicação
+  precisa (`name_swaps`); conferidor read-only `scripts/checar_trafego.py`.
 - [transcricoes/](transcricoes/) — áudios do gestor (fonte das regras).
 - Engine + configs exemplo: `scripts/duplicar_projeto.py`, `scripts/config_km_apb.json` (mesmo-workspace),
   `scripts/config_tsap_mba.json` (cross-workspace). Crie um `config_<projeto>.json` por projeto e gere
   `plano.json` na pasta de trabalho.
+- Pós-duplicação (seção "Versão em outro idioma"): `scripts/comum.py` (base: API, resolvedor
+  origem→destino), `duplicar_seguro.py`, `acabamento.py`, `recriar_dependencias.py`, `espelhar_drive.py`,
+  `remapear_descricoes.py`, `traduzir_docs.py`. Exemplo de config completo:
+  `/Users/cleberdelima/Documents/Exos/config_et_pep_esp_mce.json`.

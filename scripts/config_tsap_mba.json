@@ -57,6 +57,6 @@
     {"name": "Gestor Automações", "id": "3efb6f62-7ff0-415c-a13e-c5089115e038", "type": "user", "value": 54953372}
   ],
   "expert_swap": {"Elen Tolentino": "o expert", "Elen": "o expert"},
-  "docs": {"enabled": true, "on_marcos": true, "reference_label": "Documento de referência (Agência EU)"},
+  "docs": {"enabled": true, "on_marcos": true, "reference_label": "Referência"},
   "update_existing": false
 }

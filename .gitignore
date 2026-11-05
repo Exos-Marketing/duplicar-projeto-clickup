@@ -6,3 +6,5 @@ apply.out
 dryrun.out
 *.out
 .env
+.DS_Store
+.pytest_cache/

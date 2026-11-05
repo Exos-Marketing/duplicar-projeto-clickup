@@ -9,9 +9,12 @@ Tudo via **MCP Google Drive** (`mcp__claude_ai_Google_Drive__*`). Criar pasta =
 `create_file` com `contentMimeType: "application/vnd.google-apps.folder"` + `parentId`.
 Funciona em shared drive. **Não** usa o engine Python (que é REST do ClickUp).
 
-## 1. Onde criar — `<Cliente> › 1. Projetos › <ANO>`
+## 1. Onde criar — `<Cliente> › 2. Projetos › <ANO>` (o Kleber é `1. Projetos`)
 
-A pasta do projeto fica em **`1. Projetos` → `<ANO>`** dentro da pasta do cliente no shared drive.
+A pasta do projeto fica em **`2. Projetos` → `<ANO>`** dentro da pasta do cliente no shared drive.
+É assim para Elen, Letícia e Cristiane. A Daniela não tem a pasta do ano, então os projetos vão direto em
+`2. Projetos`. A exceção é o Kleber, com **`1. Projetos`**. Os passos abaixo valem para os dois casos:
+descubra sempre o nome real.
 Descobrir dinamicamente (não assumir IDs de outro cliente):
 1. `search_files` → `title contains '<Cliente>' and mimeType = 'application/vnd.google-apps.folder'`
    (escolher a do shared drive — `parentId` começa com `0A`; conferir `viewUrl`).
@@ -22,9 +25,23 @@ Descobrir dinamicamente (não assumir IDs de outro cliente):
    `[SIGLA][TIPO][PRODUTO][MÊS][ANO]` — se existir, **não duplicar** (Drive permite nomes repetidos).
 
 ### IDs conhecidos (atalho — confirme antes de escrever)
-| Cliente | Pasta cliente (shared drive) | `1. Projetos` | `2026` |
+| Cliente | Pasta cliente (shared drive) | `1.`/`2. Projetos` | `2026` |
 |---|---|---|---|
-| Kleber Meireles | `1urCgQguwZAjbcs1vTpf-gGcTic_Z_l4K` | `1Kj3nJXrtG9XZkBEK2MX1RU4jzuC-yVOX` | `11R1JQ5ChkjOnKyLhFXo-ZCzfHm9Gy-T5` |
+| Kleber Meireles | `1urCgQguwZAjbcs1vTpf-gGcTic_Z_l4K` | `1Kj3nJXrtG9XZkBEK2MX1RU4jzuC-yVOX` (1.) | `11R1JQ5ChkjOnKyLhFXo-ZCzfHm9Gy-T5` |
+| Elen Tolentino | `1H8cbSInDz33g8GxusknFIaDEsTicd9Rn` | `1sZxJWlujEtVT7iDWm8G5SoRVuZGETQEx` (2.) | `1WVSPbefdhbAWRpDYc4ItQxJz9xPTO7mM` |
+| Daniela Moleiro | `1YSHwPkbP9VdckkFXRgFqcTHFXJqkpXog` | `1MUIrqD8v7ImvgADQ8WUuwRt1Jm0Xubdp` (2.) | — (direto em 2. Projetos) |
+
+### Modo "espelhar a árvore da origem" (`scripts/espelhar_drive.py`)
+Use quando o projeto de origem já adaptou a estrutura-modelo. Por exemplo, o perpétuo MCE renomeou a pasta 14
+para Upsell/Remarketing e criou Brutos/Editados. Assim o destino nasce igual e os links de pasta nas descrições
+remapeiam 1:1.
+- Só pastas; idempotente por nome; `--excluir` pula pastas como `REGRAVAÇÃO`.
+- Grava `--out mapa_drive_<proj>.json`, que o `remapear_descricoes.py` usa.
+- Roda pela Drive API v3 com o token do rclone, sem MCP.
+- `--verify` compara as duas árvores.
+
+Caso real: `[ET][PEP][ESP][MCE][26]` (`1zgnyT8nETjTKrcUnc7VwqhslqvXGwgI9`, 37 pastas) espelhando `[ET][PEP][MEC][26]`.
+O nome da pasta de origem tem um erro de digitação ("MEC").
 
 > Há também uma **"Pasta padrão (COPIAR)"** na `1. Projetos` do Kleber
 > (`1NeEBnAtYMDgqMcRiBQEk6KcSVCCn8xD5`) — é o modelo humano. A estrutura canônica abaixo é a fonte
